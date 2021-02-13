@@ -1,0 +1,129 @@
+---
+title: 'Practical Machine Learning: Prediction Assignment Writeup'
+author: "Shreya Mukherjee"
+date: "February 13, 2021"
+output: html_document
+---
+
+----
+
+#### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. 
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset). Data for this project has been taken from the same source.
+
+#### Data
+
+The training data for this project is available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv).
+
+And the test data is available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+#### Loading the required libraries and data
+
+```{r message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl  <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+readTrain <- read.csv(url(trainUrl))
+readTest <- read.csv(url(testUrl))
+
+dim(readTrain)
+dim(readTest)
+```
+
+We see that the training data set has 19622 records and the testing data set has 20 records. The number of variables is 160.
+
+#### Cleaning the data
+
+1. Removing variables with variance ≈ 0
+
+```{r}
+var0 <- nearZeroVar(readTrain)
+
+train <- readTrain[,-var0]
+test <- readTest[,-var0]
+
+dim(train)
+```
+
+We see that 60 redundant variables are removed in the first step.
+
+2. Removing Variables that have NA value, threshold being 95%
+
+```{r}
+valNA <- sapply(train, function(x) mean(is.na(x))) > 0.95
+
+train <- train[, valNA == FALSE]
+test <- test[, valNA == FALSE]
+
+dim(train)
+```
+
+The second step leaves 59 variables.
+
+3. Removing variables that are non-numeric as they don't contribute to our model. A look at the data set shows that only the first 7 variables are non-numeric, hence they are removed.
+
+```{r}
+train <- train[,8:59]
+test <- test[,8:59]
+```
+
+We now take a look at the column names of the data set.
+
+```{r}
+colnames(train)
+```
+
+#### Data partitioning
+
+We divide our training data (`train`) into 2 sets, `training` (60%) and `testing` (40%). We will use the original testing data, `test` as our validation set.
+
+```{r}
+trainClasse <- createDataPartition(train$classe, p=0.6, list=FALSE)
+training <- train[trainClasse,]
+testing <- train[-trainClasse,]
+```
+
+#### Decision tree
+
+```{r}
+treeModfit <- train(classe ~ ., data = training, method="rpart")
+treePred <- predict(treeModfit, testing)
+confusionMatrix(treePred, as.factor(testing$classe))
+rpart.plot(treeModfit$finalModel, roundint=FALSE)
+```
+
+We see that the accuracy ≈ 50%, which is quite low.
+
+#### Random forest
+
+```{r}
+forestModfit <- train(classe ~ ., data = training, method = "rf", ntree = 100)
+forestPred <- predict(forestModfit, testing)
+forestPredConfusion <- confusionMatrix(forestPred, as.factor(testing$classe))
+forestPredConfusion
+```
+
+We see that the accuracy ≈ 99%, which is great. hence, we select the random forest model as our prediction model for this analysis.
+
+#### Final Prediction
+
+We now apply our model to the testing data, `test`
+
+```{r}
+finalPred <- predict(forestModfit, test )
+finalPred
+```
+
+#### Conclusion
+
+As we see from the result, the random forest outperforms the decision tree in terms of accuracy. While the decision tree gives us ≈50% accuracy, using the random forest gives us a whooping 99% accuracy.
+
+----
